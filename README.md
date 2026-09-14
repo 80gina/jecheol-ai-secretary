@@ -61,13 +61,24 @@ AI:     "최근 7일 평균은 4,807원/kg입니다. 평년보다 4.8% 높지만
 
 ## 3. 배포 URL
 
-> ⚠️ **배포 후 아래 세 줄을 본인 URL로 바꿔주세요.**
-
 | 구분 | URL |
 |---|---|
-| 프론트엔드 | `https://<프로젝트명>.vercel.app` |
-| 백엔드 API | `https://<서비스명>.onrender.com` |
-| Swagger UI | `https://<서비스명>.onrender.com/docs` |
+| 프론트엔드 | https://jecheol-ai-secretary.vercel.app |
+| 백엔드 API | https://seasonal-ai-backend.onrender.com |
+| Swagger UI | https://seasonal-ai-backend.onrender.com/docs |
+| 소스 저장소 | https://github.com/80gina/jecheol-ai-secretary |
+
+배포일: 2026-09-14 · 백엔드 Render(Blueprint, `render.yaml`) · 프론트엔드 Vercel(Root Directory `frontend`)
+
+서버 상태는 <https://seasonal-ai-backend.onrender.com/health> 에서 한눈에 확인할 수 있습니다.
+
+```json
+{"status":"ok","env":"production","db_backend":"firestore",
+ "openai_configured":true,
+ "allowed_origins":["https://jecheol-ai-secretary.vercel.app"]}
+```
+
+> ⚠️ **외부 서비스 사용량 안내**: OpenAI 크레딧이나 Firebase 무료 할당량(하루 읽기 5만 건)이 소진되면 해당 기능이 `429`로 응답합니다. 배포나 인증 문제가 아니며, 화면에는 오류 사유가 그대로 표시됩니다. Firebase 할당량은 매일 태평양시 자정(한국시간 오후 4시경)에 초기화됩니다. 할당량과 무관하게 시연해야 할 때는 Render 환경 변수 `USE_MEMORY_DB`를 `true`로 두면 저장 계층이 `backend/data/seed_data.json` 기반 메모리 DB로 전환되어 외부 호출 없이 동작합니다.
 
 > 💡 **콜드스타트 안내**: Render 무료 티어는 15분간 요청이 없으면 절전 상태가 됩니다. 첫 접속 시 응답까지 **최대 60초**가 걸릴 수 있습니다. 프론트엔드는 페이지 로드 직후 `/health`를 호출해 서버를 미리 깨우고, 2.5초 이상 걸리면 상단에 안내 배너를 띄웁니다.
 
