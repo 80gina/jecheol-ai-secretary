@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: seasonal-ai-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: APP_ENV
+        value: production
+      - key: USE_MEMORY_DB
+        value: "false"
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_MAX_TOKENS
+        value: "600"
+      # 아래 두 개는 Render 대시보드에서 직접 입력 (값을 저장소에 두지 않는다)
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_B64
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false

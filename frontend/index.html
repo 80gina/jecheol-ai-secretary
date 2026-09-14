@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>제철밥상 플래너 · AI 비서</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥬</text></svg>" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">🥬</span>
+    <div>
+      <h1>제철밥상 플래너 <span class="sub">AI 비서</span></h1>
+      <p class="tagline">뭘 만들지 말하면, 필요한 재료를 지금 사도 되는지 알려드립니다</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <button id="themeBtn" class="btn btn--ghost btn--sm" type="button"
+            title="밝은 화면 / 어두운 화면 전환" aria-label="화면 모드 전환">🌙 어둡게</button>
+    <div id="conn" class="conn conn--wait">서버 연결 확인 중…</div>
+  </div>
+</header>
+
+<div id="coldstart" class="coldstart" hidden>
+  ⏳ 서버가 절전 상태에서 깨어나는 중입니다. 첫 요청은 최대 60초가 걸릴 수 있어요.
+</div>
+
+<!-- ══════════════ 1층: AI 채팅 ══════════════ -->
+<section class="hero">
+  <div class="hero-inner">
+
+    <div class="hero-head">
+      <h2>🤖 무엇을 만드시나요?</h2>
+      <label class="toggle">
+        <input type="checkbox" id="useTools" checked />
+        <span>도구 호출 (Function Calling)</span>
+      </label>
+    </div>
+
+    <form id="chatForm" class="chat-form">
+      <input id="chatInput" type="text" maxlength="2000" autocomplete="off"
+             placeholder="예: 김치찌개 하려는데 재료값 어때?" required />
+      <button id="sendBtn" type="submit" class="btn btn--primary">보내기</button>
+    </form>
+
+    <div class="quick-asks" id="quickAsks">
+      <span class="quick-label">이렇게 물어보세요</span>
+      <button type="button" data-ask="오늘 뭐 사면 좋아?">오늘 뭐 사면 좋아?</button>
+      <button type="button" data-ask="김치찌개 하려는데 재료값 어때?">김치찌개 재료값</button>
+      <button type="button" data-ask="비빔밥 수업 하려는데 지금 뭐가 싸?">비빔밥 재료</button>
+      <button type="button" data-ask="전어 지금 사도 될까?">전어 사도 될까</button>
+      <button type="button" data-ask="시금치가 비싼데 뭘 대신 쓸까?">시금치 대체재</button>
+    </div>
+
+    <div id="messages" class="messages"></div>
+    <div id="toolTrace" class="tool-trace" hidden></div>
+  </div>
+</section>
+
+<!-- ══════════════ 2층: 조건으로 고르기 ══════════════ -->
+<section class="planner">
+  <div class="planner-inner">
+
+    <div class="card-head">
+      <h2>🎛️ 조건으로 고르기</h2>
+      <div class="seg seg--sm" id="planMode" role="group" aria-label="추천 방식">
+        <button type="button" data-mode="server" aria-pressed="true">서버 추천</button>
+        <button type="button" data-mode="ai">AI에게 묻기</button>
+      </div>
+    </div>
+    <p class="card-note" id="planModeNote">
+      같은 조건이면 같은 결과가 나옵니다. 조건은 서버가 계산해 음식을 고르고, 값은 실제 시세로 판정합니다.
+    </p>
+
+    <div class="knobs">
+      <div class="knob knob--wide">
+        <label>조리법</label>
+        <div class="chips" id="prepChips"></div>
+      </div>
+      <div class="knob knob--wide">
+        <label>식사 목적</label>
+        <div class="chips" id="purposeChips"></div>
+      </div>
+      <div class="knob">
+        <label for="kSeason">계절감 <b id="kSeasonV">보통</b></label>
+        <input type="range" id="kSeason" min="0" max="100" value="70" />
+        <span class="knob-ends"><i>아무 때나</i><i>제철만</i></span>
+      </div>
+      <div class="knob">
+        <label for="kFresh">신선도 <b id="kFreshV">보통</b></label>
+        <input type="range" id="kFresh" min="0" max="100" value="50" />
+        <span class="knob-ends"><i>상관없음</i><i>당일 재료</i></span>
+      </div>
+      <div class="knob">
+        <label for="kDiff">난이도 <b id="kDiffV">상관없음</b></label>
+        <input type="range" id="kDiff" min="0" max="5" value="0" />
+        <span class="knob-ends"><i>아주 쉬움</i><i>손이 많이 감</i></span>
+      </div>
+      <div class="knob">
+        <label for="kConv">편의성 <b id="kConvV">상관없음</b></label>
+        <input type="range" id="kConv" min="0" max="5" value="0" />
+        <span class="knob-ends"><i>준비 오래</i><i>바로 조리</i></span>
+      </div>
+    </div>
+
+    <div class="planner-actions">
+      <button id="planBtn" class="btn btn--primary" type="button">이 조건으로 추천받기</button>
+      <button id="planReset" class="btn btn--ghost btn--sm" type="button">조건 초기화</button>
+      <span class="muted" id="planCount"></span>
+    </div>
+
+    <div id="planResult" class="plan-result"></div>
+  </div>
+</section>
+
+<main class="layout">
+
+  <div class="main-col">
+
+    <!-- 대화·추천에서 뽑힌 장바구니 -->
+    <section class="card" id="cartCard" hidden>
+      <div class="card-head">
+        <h2>🛒 필요한 재료</h2>
+        <button id="clearFocus" class="btn btn--ghost btn--sm" type="button">전체 보기</button>
+      </div>
+      <p class="card-note" id="cartReason"></p>
+      <div id="cartBoard" class="board"></div>
+    </section>
+
+    <!-- 품목별 시세 -->
+    <section class="card">
+      <div class="card-head">
+        <h2 id="boardTitle">🥬 품목별 시세</h2>
+        <div class="seg seg--sm" id="sortSeg" role="group" aria-label="정렬">
+          <button type="button" data-sort="verdict" aria-pressed="true">사기 좋은 순</button>
+          <button type="button" data-sort="name">이름순</button>
+          <button type="button" data-sort="price">비싼 순</button>
+        </div>
+      </div>
+      <div class="cat-bar" id="catBar"></div>
+      <div id="itemBoard" class="board">불러오는 중…</div>
+    </section>
+
+    <!-- 가격 추이 + 예측 -->
+    <section class="card">
+      <div class="card-head">
+        <h2>📈 가격 추이 <span class="unit-note" id="chartSubject">(장바구니 합계)</span></h2>
+        <div class="seg seg--sm" id="rangeSeg" role="group" aria-label="기간 선택">
+          <button type="button" data-range="30">1개월</button>
+          <button type="button" data-range="90" aria-pressed="true">3개월</button>
+          <button type="button" data-range="365">1년</button>
+          <button type="button" data-range="0">전체</button>
+        </div>
+      </div>
+      <div class="cat-bar" id="chartCatBar"></div>
+      <div class="item-picker" id="itemPicker"></div>
+      <div class="chart-wrap">
+        <div id="chart"></div>
+        <div id="tip" class="tip" hidden></div>
+      </div>
+      <div class="legend" id="legend"></div>
+      <div class="alt-row" id="altRow"></div>
+
+      <details class="fc" id="fcBox">
+        <summary><b>🔮 향후 추이선</b> <span class="fold-hint">가정을 넣어 앞으로를 계산합니다</span></summary>
+        <div class="fc-body">
+          <div class="fc-knobs">
+            <label>앞으로 <b id="fcDaysV">60일</b>
+              <input type="range" id="fcDays" min="14" max="180" step="7" value="60" /></label>
+            <label>환율 <b id="fcFxV">+0%</b>
+              <input type="range" id="fcFx" min="-20" max="20" value="0" /></label>
+            <label>작황 악화 <b id="fcWeatherV">+0%</b>
+              <input type="range" id="fcWeather" min="-20" max="20" value="0" /></label>
+            <label>운송비 <b id="fcFuelV">+0%</b>
+              <input type="range" id="fcFuel" min="-20" max="20" value="0" /></label>
+          </div>
+          <p class="fc-method" id="fcMethod"></p>
+        </div>
+      </details>
+
+      <div class="stat-grid" id="statGrid"></div>
+    </section>
+
+    <!-- 데이터 시각화 (옛 '데이터 요약' 자리) -->
+    <section class="card">
+      <div class="card-head">
+        <h2>📊 데이터 시각화</h2>
+        <div class="seg seg--sm" id="vizSeg" role="group" aria-label="시각화 종류">
+          <button type="button" data-viz="radar" aria-pressed="true">평가 지표</button>
+          <button type="button" data-viz="swot">SWOT</button>
+          <button type="button" data-viz="heat">분류별 히트맵</button>
+          <button type="button" data-viz="dist">가격 분포</button>
+        </div>
+      </div>
+      <p class="card-note" id="vizNote"></p>
+      <div id="vizBody" class="viz-body">불러오는 중…</div>
+    </section>
+
+  </div>
+
+  <aside class="side">
+
+    <section class="card">
+      <h2>🚦 오늘의 판정</h2>
+      <div id="verdictBox" class="verdict">불러오는 중…</div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>💬 대화 기록</h2>
+        <button id="newChatBtn" class="btn btn--ghost btn--sm">+ 새 대화</button>
+      </div>
+      <ul id="convList" class="conv-list"><li class="muted">불러오는 중…</li></ul>
+    </section>
+
+    <details class="card card--fold">
+      <summary><h2>🗂️ 데이터 관리</h2><span class="fold-hint">추가 · 수정 · 삭제</span></summary>
+      <div class="fold-body">
+        <form id="dataForm" class="data-form">
+          <input type="hidden" id="editingId" />
+          <label>날짜<input type="date" id="fDate" required /></label>
+          <label>가격(원/kg)<input type="number" id="fValue" min="0" step="10" required /></label>
+          <label>품목<input type="text" id="fMemo" maxlength="200" placeholder="예: 배추" list="itemNames" /></label>
+          <datalist id="itemNames"></datalist>
+          <div class="form-actions">
+            <button type="submit" id="dataSubmitBtn" class="btn btn--primary btn--sm">추가</button>
+            <button type="button" id="cancelEditBtn" class="btn btn--ghost btn--sm" hidden>취소</button>
+          </div>
+        </form>
+
+        <div class="card-head">
+          <h3>최근 기록</h3>
+          <button id="reloadDataBtn" class="btn btn--ghost btn--sm">새로고침</button>
+        </div>
+        <ul id="dataList" class="data-list"><li class="muted">불러오는 중…</li></ul>
+
+        <div class="export-row">
+          <span class="muted">내보내기</span>
+          <button id="csvBtn" class="btn btn--ghost btn--sm" type="button">CSV</button>
+          <button id="jsonBtn" class="btn btn--ghost btn--sm" type="button">JSON</button>
+        </div>
+        <div id="summaryBox" class="summary summary--mini"></div>
+      </div>
+    </details>
+
+  </aside>
+
+</main>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script src="viz.js"></script>
+</body>
+</html>

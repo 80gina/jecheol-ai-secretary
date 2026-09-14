@@ -1,0 +1,21 @@
+# 버전 고정 이유
+#   개발 PC 는 Python 3.14, Render 배포는 Python 3.11 을 쓴다.
+#   pydantic-core 는 2.35.0 부터 3.14 용 미리 빌드된 wheel 을 제공한다.
+#   그보다 낮은 버전을 쓰면 pip 이 Rust 로 직접 컴파일하려다 실패한다.
+#   아래 조합은 두 환경 모두에서 wheel 만으로 설치되는 것을 확인했다.
+#     pip install --dry-run --python-version 314 --platform win_amd64 --only-binary=:all: -r requirements.txt
+#     pip install --dry-run --python-version 311 --platform manylinux2014_x86_64 --only-binary=:all: -r requirements.txt
+#
+# uvicorn 에 [standard] 를 붙이지 않은 이유
+#   [standard] 는 uvloop·httptools 같은 성능 옵션을 함께 설치하는데
+#   uvloop 에 3.14 용 wheel 이 아직 없다. 기능 차이는 없으므로 뺐다.
+
+fastapi==0.121.2
+uvicorn==0.38.0
+firebase-admin==7.1.0
+openai==2.9.0
+python-dotenv==1.1.1
+pydantic==2.12.5
+
+# smoke_test.py 의 TestClient 가 쓴다 (openai 가 끌어오지만 명시해 둔다)
+httpx==0.28.1
