@@ -32,7 +32,12 @@ def _client():
         )
     from openai import OpenAI
 
-    return OpenAI(api_key=settings.OPENAI_API_KEY)
+    # OPENAI_BASE_URL 이 비어 있으면 라이브러리 기본값(OpenAI)으로 간다.
+    # 값이 있으면 그 주소로 붙는다 — Gemini 의 OpenAI 호환 엔드포인트가 그 예다.
+    kwargs: dict[str, Any] = {"api_key": settings.OPENAI_API_KEY}
+    if settings.OPENAI_BASE_URL:
+        kwargs["base_url"] = settings.OPENAI_BASE_URL
+    return OpenAI(**kwargs)
 
 
 def _load_history(conversation_id: str | None) -> list[dict[str, str]]:

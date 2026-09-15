@@ -123,5 +123,8 @@ def health() -> dict:
         "env": settings.APP_ENV,
         "db_backend": get_backend(),
         "openai_configured": bool(settings.OPENAI_API_KEY),
+        # 어느 공급자·어느 모델로 떠 있는지도 함께 알린다. 키 자체는 절대 내보내지 않는다.
+        "llm_provider": "gemini" if "googleapis.com" in settings.OPENAI_BASE_URL else "openai",
+        "llm_model": settings.OPENAI_MODEL,
         "allowed_origins": settings.ALLOWED_ORIGINS,
     }

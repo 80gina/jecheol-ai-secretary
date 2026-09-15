@@ -14,8 +14,12 @@ services:
         value: production
       - key: USE_MEMORY_DB
         value: "false"
+      # LLM 공급자. 주소를 비우면 OpenAI, 아래처럼 두면 Gemini 의 OpenAI 호환
+      # 엔드포인트로 붙는다. 코드는 그대로 두고 이 두 줄만 바꾸면 갈아끼워진다.
+      - key: OPENAI_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai/
       - key: OPENAI_MODEL
-        value: gpt-4o-mini
+        value: gemini-2.5-flash
       - key: OPENAI_MAX_TOKENS
         value: "600"
       # 아래 두 개는 Render 대시보드에서 직접 입력 (값을 저장소에 두지 않는다)

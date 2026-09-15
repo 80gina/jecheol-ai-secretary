@@ -16,8 +16,18 @@ def _split_origins(raw: str) -> list[str]:
 class Settings:
     """앱 전역 설정. 모든 값은 환경 변수에서만 읽는다."""
 
-    # --- OpenAI ---
+    # --- LLM (OpenAI 호환 규격) ---
+    # 이 앱은 openai 라이브러리를 쓰지만, 접속 주소만 바꾸면 OpenAI 호환 규격을
+    # 제공하는 다른 공급자도 코드 수정 없이 그대로 쓸 수 있다.
+    #
+    #   OpenAI  : OPENAI_BASE_URL 을 비우고  OPENAI_MODEL=gpt-4o-mini
+    #   Gemini  : OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+    #             OPENAI_MODEL=gemini-2.5-flash
+    #
+    # 공급자를 갈아끼우는 일이 '환경 변수 두 줄'로 끝나도록 주소를 밖으로 뺐다.
+    # 특정 업체에 코드가 묶이지 않게 하는 것이 목적이다.
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     # 과금 방지: 응답 토큰 상한을 반드시 둔다
     OPENAI_MAX_TOKENS: int = int(os.getenv("OPENAI_MAX_TOKENS", "600"))
