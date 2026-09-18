@@ -112,6 +112,18 @@ def root():
     return RedirectResponse(url="/docs")
 
 
+def _llm_host() -> str:
+    """접속 중인 LLM 호스트 이름. 주소가 비어 있으면 라이브러리 기본값(OpenAI)."""
+    if not settings.OPENAI_BASE_URL:
+        return "api.openai.com"
+    try:
+        from urllib.parse import urlparse
+
+        return urlparse(settings.OPENAI_BASE_URL).hostname or settings.OPENAI_BASE_URL
+    except Exception:  # noqa: BLE001
+        return settings.OPENAI_BASE_URL
+
+
 @app.get("/health", tags=["system"], summary="헬스체크 / 콜드스타트 깨우기")
 def health() -> dict:
     """
@@ -123,8 +135,13 @@ def health() -> dict:
         "env": settings.APP_ENV,
         "db_backend": get_backend(),
         "openai_configured": bool(settings.OPENAI_API_KEY),
-        # 어느 공급자·어느 모델로 떠 있는지도 함께 알린다. 키 자체는 절대 내보내지 않는다.
-        "llm_provider": "gemini" if "googleapis.com" in settings.OPENAI_BASE_URL else "openai",
+        # 어디로, 무엇으로 붙어 있는지 알린다. 키 자체는 절대 내보내지 않는다.
+        #
+        # 공급자 이름을 추측해서 붙이지 않고 '접속하는 호스트'를 그대로 보여준다.
+        # 중계 게이트웨이를 거치면 주소와 실제 모델 제작사가 다를 수 있어
+        # ("copa.codyssey.kr 를 거쳐 gpt-5-mini 를 쓴다") 이름을 지어내면
+        # 오히려 사실과 어긋난다. 호스트와 모델 두 가지면 상황이 정확히 드러난다.
+        "llm_host": _llm_host(),
         "llm_model": settings.OPENAI_MODEL,
         "allowed_origins": settings.ALLOWED_ORIGINS,
     }
