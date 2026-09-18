@@ -20,8 +20,10 @@ services:
         value: https://generativelanguage.googleapis.com/v1beta/openai/
       - key: OPENAI_MODEL
         value: gemini-2.5-flash
+      # 600 은 GPT 기준이었다. Gemini 2.5 는 생각 토큰과 답변 토큰이 이 예산을
+      # 나눠 쓰므로 여유를 둔다. 상한 자체는 그대로 있으니 과금 안전장치는 유지된다.
       - key: OPENAI_MAX_TOKENS
-        value: "600"
+        value: "1500"
       # 아래 두 개는 Render 대시보드에서 직접 입력 (값을 저장소에 두지 않는다)
       - key: OPENAI_API_KEY
         sync: false

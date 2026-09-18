@@ -25,6 +25,20 @@ class ChatConfigError(Exception):
     """OpenAI 키 등 설정 문제"""
 
 
+def _is_gemini() -> bool:
+    """
+    Gemini 계열 모델인지 판단한다.
+
+    주소만 보면 안 된다. 중계 서버(예: 코디세이 교육용 게이트웨이)를 거치면
+    주소는 googleapis.com 이 아니지만 실제로 답하는 것은 Gemini 다.
+    그래서 주소와 모델 이름을 함께 본다.
+    """
+    return (
+        "googleapis.com" in settings.OPENAI_BASE_URL
+        or settings.OPENAI_MODEL.lower().startswith("gemini")
+    )
+
+
 def _client():
     if not settings.OPENAI_API_KEY:
         raise ChatConfigError(
@@ -65,7 +79,26 @@ def _call_openai(client, messages: list[dict[str, Any]], use_tools: bool):
     if use_tools:
         kwargs["tools"] = tools.openai_tool_params()
         kwargs["tool_choice"] = "auto"
-    return client.chat.completions.create(**kwargs)
+
+    # Gemini 2.5 계열은 '생각(thinking)' 토큰을 먼저 쓰고 그 다음에 답을 쓴다.
+    # 그 둘이 같은 max_tokens 예산을 나눠 쓰므로, 예산이 빠듯하면 생각만 하다가
+    # 본문이 비어 있는 응답(finish_reason="length")이 돌아온다 — 화면에는
+    # "답변을 생성하지 못했습니다" 로만 보여서 원인을 알기 어렵다.
+    # 이 앱은 데이터 요약을 이미 서버에서 계산해 넘기므로 모델이 따로 추론할 것이
+    # 많지 않다. 생각을 끄고 예산을 전부 답변에 쓰게 한다.
+    if _is_gemini():
+        kwargs["reasoning_effort"] = "none"
+
+    try:
+        return client.chat.completions.create(**kwargs)
+    except Exception as exc:
+        # reasoning_effort 는 공급자·모델·라이브러리 버전에 따라 없을 수 있다.
+        # 그것 때문에 거부당한 경우에만 그 옵션을 빼고 한 번 더 시도한다.
+        # 다른 이유의 오류까지 삼키면 진짜 원인을 못 보게 되므로 그대로 올려보낸다.
+        if "reasoning_effort" in str(exc) and "reasoning_effort" in kwargs:
+            kwargs.pop("reasoning_effort", None)
+            return client.chat.completions.create(**kwargs)
+        raise
 
 
 def chat(message: str, conversation_id: str | None, use_tools: bool = True,
@@ -133,7 +166,17 @@ def chat(message: str, conversation_id: str | None, use_tools: bool = True,
         response = _call_openai(client, messages, use_tools)
         choice = response.choices[0]
 
-    reply = (choice.message.content or "").strip() or "답변을 생성하지 못했습니다. 다시 시도해 주세요."
+    reply = (choice.message.content or "").strip()
+    if not reply:
+        # 왜 비었는지를 구분해서 알린다. "다시 시도해 주세요" 한 줄로 뭉뚱그리면
+        # 토큰 예산 문제인지 모델 문제인지 알 수 없어 고칠 수가 없다.
+        if choice.finish_reason == "length":
+            reply = (
+                "답변이 길이 제한에 걸려 끊겼습니다. "
+                f"환경 변수 OPENAI_MAX_TOKENS(현재 {settings.OPENAI_MAX_TOKENS})를 늘려 주세요."
+            )
+        else:
+            reply = f"답변을 생성하지 못했습니다 (종료 사유: {choice.finish_reason}). 다시 시도해 주세요."
 
     # 이 대화에서 '필요한 식재료'를 뽑는다. 화면은 이 품목을 시세판 맨 위로 올린다.
     # 질문을 먼저 보고 답변을 나중에 봐서, 사용자가 물은 것이 앞에 오게 한다.
