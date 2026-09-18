@@ -105,6 +105,39 @@ def _load_history(conversation_id: str | None) -> list[dict[str, str]]:
     return history[-HISTORY_TURNS:]
 
 
+def _adapt(kwargs: dict[str, Any], message: str) -> bool:
+    """
+    공급자가 거부한 항목을 읽고 요청을 한 번 고쳐본다. 고쳤으면 True.
+
+    왜 이렇게 하나.
+        같은 'OpenAI 호환' 규격이라도 모델마다 받아주는 항목이 다르다.
+        예를 들어 gpt-5 계열은 max_tokens 대신 max_completion_tokens 를 쓰고
+        temperature 는 1 만 받는다. Gemini 는 reasoning_effort 를 받는다.
+        모델 이름을 코드에 나열하면 새 모델이 나올 때마다 코드를 고쳐야 한다.
+        그래서 이름이 아니라 '서버가 뭐라고 거부했는지'를 보고 맞춘다.
+        모델이 바뀌어도 코드는 그대로 둘 수 있다.
+    """
+    low = message.lower()
+
+    # max_tokens 를 안 받는 모델 → max_completion_tokens 로 이름만 바꾼다
+    if "max_tokens" in low and "max_completion_tokens" in low and "max_tokens" in kwargs:
+        kwargs["max_completion_tokens"] = kwargs.pop("max_tokens")
+        return True
+
+    # temperature 를 고정값만 받는 모델 → 아예 빼고 기본값에 맡긴다
+    if "temperature" in low and "temperature" in kwargs:
+        kwargs.pop("temperature")
+        return True
+
+    # 모르는 항목이라고 거부하면 그 항목을 뺀다
+    for key in ("reasoning_effort", "tool_choice", "max_completion_tokens"):
+        if key in low and key in kwargs:
+            kwargs.pop(key)
+            return True
+
+    return False
+
+
 def _call_openai(client, messages: list[dict[str, Any]], use_tools: bool):
     kwargs: dict[str, Any] = {
         "model": settings.OPENAI_MODEL,
@@ -116,25 +149,25 @@ def _call_openai(client, messages: list[dict[str, Any]], use_tools: bool):
         kwargs["tools"] = tools.openai_tool_params()
         kwargs["tool_choice"] = "auto"
 
-    # Gemini 2.5 계열은 '생각(thinking)' 토큰을 먼저 쓰고 그 다음에 답을 쓴다.
-    # 그 둘이 같은 max_tokens 예산을 나눠 쓰므로, 예산이 빠듯하면 생각만 하다가
-    # 본문이 비어 있는 응답(finish_reason="length")이 돌아온다 — 화면에는
-    # "답변을 생성하지 못했습니다" 로만 보여서 원인을 알기 어렵다.
-    # 이 앱은 데이터 요약을 이미 서버에서 계산해 넘기므로 모델이 따로 추론할 것이
-    # 많지 않다. 생각을 끄고 예산을 전부 답변에 쓰게 한다.
+    # Gemini 2.5 이상은 '생각(thinking)' 토큰을 먼저 쓰고 그 다음에 답을 쓴다.
+    # 그 둘이 같은 출력 예산을 나눠 쓰므로, 예산이 빠듯하면 생각만 하다가
+    # 본문이 빈 응답(finish_reason="length")이 돌아온다. 이 앱은 데이터 요약을
+    # 서버에서 이미 계산해 넘기므로 모델이 따로 추론할 것이 많지 않다.
     if _is_gemini():
         kwargs["reasoning_effort"] = "none"
 
-    try:
-        return client.chat.completions.create(**kwargs)
-    except Exception as exc:
-        # reasoning_effort 는 공급자·모델·라이브러리 버전에 따라 없을 수 있다.
-        # 그것 때문에 거부당한 경우에만 그 옵션을 빼고 한 번 더 시도한다.
-        # 다른 이유의 오류까지 삼키면 진짜 원인을 못 보게 되므로 그대로 올려보낸다.
-        if "reasoning_effort" in str(exc) and "reasoning_effort" in kwargs:
-            kwargs.pop("reasoning_effort", None)
+    # 거부당하면 원인을 읽고 고쳐서 다시 — 최대 4번. 그래도 안 되면 그대로 올려
+    # 보낸다. 무한히 감싸면 진짜 원인(키·한도 등)이 묻히기 때문이다.
+    last: Exception | None = None
+    for _ in range(4):
+        try:
             return client.chat.completions.create(**kwargs)
-        raise
+        except Exception as exc:  # noqa: BLE001
+            last = exc
+            if not _adapt(kwargs, str(exc)):
+                raise
+    if last:
+        raise last
 
 
 def chat(message: str, conversation_id: str | None, use_tools: bool = True,
