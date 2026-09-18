@@ -2,6 +2,9 @@
 
 > 내가 기록한 **제철 식재료 가격 시계열**을 이해하고, 그 데이터를 근거로 "지금 사도 되는지"까지 판정해 주는 AI 웹 서비스
 
+
+[참고] file:///C:/Users/yello/Downloads/%EA%B8%B0%EB%8A%A5%EB%AA%85%EC%84%B8%EC%84%9C_%EC%9D%B8%ED%8F%AC%EA%B7%B8%EB%9E%98%ED%94%BD.html
+
 ---
 
 ## 1. 서비스 소개 — 무엇을 해결하는가
