@@ -105,6 +105,41 @@ def _load_history(conversation_id: str | None) -> list[dict[str, str]]:
     return history[-HISTORY_TURNS:]
 
 
+def _needs_new_token_param() -> bool:
+    """
+    출력 길이 항목의 이름이 max_completion_tokens 인 계열인지.
+
+    OpenAI 의 gpt-5 · o 시리즈는 max_tokens 를 더 이상 받지 않고,
+    temperature 도 기본값만 받는다. 이름으로 한 번 걸러두면 첫 시도부터 맞는
+    형태로 나가서 왕복을 줄일 수 있다. (이름이 안 걸려도 아래 _fallback 이
+    받아내므로, 여기 목록이 낡아도 동작은 한다.)
+    """
+    m = settings.OPENAI_MODEL.lower()
+    return m.startswith(("gpt-5", "o1", "o3", "o4"))
+
+
+def _fallback(kwargs: dict[str, Any]) -> bool:
+    """
+    거부 사유를 알 수 없을 때, 요청을 한 단계 더 보수적인 형태로 바꾼다.
+
+    왜 필요한가.
+        중계 게이트웨이는 위쪽 오류를 'Provider returned an error' 처럼
+        뭉뚱그려 돌려주는 경우가 있다. 어떤 항목이 문제인지 알려주지 않으므로
+        사유를 읽어 고치는 방법이 통하지 않는다.
+        그래서 '가장 흔히 문제가 되는 것부터 순서대로 걷어내며' 시도한다.
+    """
+    if "temperature" in kwargs:
+        kwargs.pop("temperature")
+        return True
+    if "max_tokens" in kwargs:
+        kwargs["max_completion_tokens"] = kwargs.pop("max_tokens")
+        return True
+    if "max_completion_tokens" in kwargs:
+        kwargs.pop("max_completion_tokens")
+        return True
+    return False
+
+
 def _adapt(kwargs: dict[str, Any], message: str) -> bool:
     """
     공급자가 거부한 항목을 읽고 요청을 한 번 고쳐본다. 고쳤으면 True.
@@ -142,9 +177,14 @@ def _call_openai(client, messages: list[dict[str, Any]], use_tools: bool):
     kwargs: dict[str, Any] = {
         "model": settings.OPENAI_MODEL,
         "messages": messages,
-        "max_tokens": settings.OPENAI_MAX_TOKENS,
-        "temperature": 0.4,
     }
+    if _needs_new_token_param():
+        # gpt-5 · o 시리즈: 이름이 다르고, temperature 는 기본값만 받는다
+        kwargs["max_completion_tokens"] = settings.OPENAI_MAX_TOKENS
+    else:
+        kwargs["max_tokens"] = settings.OPENAI_MAX_TOKENS
+        kwargs["temperature"] = 0.4
+
     if use_tools:
         kwargs["tools"] = tools.openai_tool_params()
         kwargs["tool_choice"] = "auto"
@@ -164,7 +204,8 @@ def _call_openai(client, messages: list[dict[str, Any]], use_tools: bool):
             return client.chat.completions.create(**kwargs)
         except Exception as exc:  # noqa: BLE001
             last = exc
-            if not _adapt(kwargs, str(exc)):
+            # ① 사유를 읽어 고칠 수 있으면 그렇게, ② 안 되면 보수적 형태로.
+            if not _adapt(kwargs, str(exc)) and not _fallback(kwargs):
                 raise
     if last:
         raise last
