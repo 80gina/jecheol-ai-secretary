@@ -54,6 +54,42 @@ def _client():
     return OpenAI(**kwargs)
 
 
+def _assistant_turn(assistant_msg: Any) -> dict[str, Any]:
+    """
+    도구를 호출한 모델의 응답을 '다음 요청에 되돌려줄 형태'로 만든다.
+
+    왜 통째로 돌려주나.
+        Gemini 3 계열은 도구 호출마다 thought_signature(생각 서명)를 함께 준다.
+        다음 요청에 그 서명이 없으면 400 으로 거부한다 — 모델이 자기가 왜 그 도구를
+        불렀는지 이어서 기억하기 위한 장치다.
+        필요한 필드만 골라 새로 조립하면 그 서명이 조용히 사라진다.
+        그래서 받은 응답을 그대로 되돌려주고, 공급자가 덧붙인 필드는 건드리지 않는다.
+        이렇게 하면 앞으로 어떤 공급자가 무엇을 덧붙이든 같은 방식으로 동작한다.
+    """
+    try:
+        turn = assistant_msg.model_dump(exclude_none=True)
+        if turn.get("tool_calls"):
+            turn.setdefault("role", "assistant")
+            turn.setdefault("content", assistant_msg.content or "")
+            return turn
+    except Exception:  # noqa: BLE001 - 라이브러리 형태가 달라도 아래로 넘어간다
+        pass
+
+    # 되돌려줄 수 없는 형태라면 최소한의 정보로라도 잇는다 (기존 방식).
+    return {
+        "role": "assistant",
+        "content": assistant_msg.content or "",
+        "tool_calls": [
+            {
+                "id": tc.id,
+                "type": "function",
+                "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+            }
+            for tc in assistant_msg.tool_calls
+        ],
+    }
+
+
 def _load_history(conversation_id: str | None) -> list[dict[str, str]]:
     if not conversation_id:
         return []
@@ -131,23 +167,7 @@ def chat(message: str, conversation_id: str | None, use_tools: bool = True,
     while use_tools and choice.finish_reason == "tool_calls" and rounds < MAX_TOOL_ROUNDS:
         rounds += 1
         assistant_msg = choice.message
-        messages.append(
-            {
-                "role": "assistant",
-                "content": assistant_msg.content or "",
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments,
-                        },
-                    }
-                    for tc in assistant_msg.tool_calls
-                ],
-            }
-        )
+        messages.append(_assistant_turn(assistant_msg))
 
         for tc in assistant_msg.tool_calls:
             args, result = tools.run_tool_json(tc.function.name, tc.function.arguments)
