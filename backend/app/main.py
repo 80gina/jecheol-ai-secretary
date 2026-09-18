@@ -19,6 +19,7 @@ from fastapi.responses import RedirectResponse
 from .config import settings
 from .db import get_backend, init_db
 from .routers import chat, conversations, data, recommend
+from .services import data_service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("seasonal-ai")
@@ -143,5 +144,9 @@ def health() -> dict:
         # 오히려 사실과 어긋난다. 호스트와 모델 두 가지면 상황이 정확히 드러난다.
         "llm_host": _llm_host(),
         "llm_model": settings.OPENAI_MODEL,
+        # 읽기 캐시 상태. 이 값이 보이면 "왜 갑자기 느려졌나 / 왜 한도를 넘겼나"를
+        # 로그를 뒤지지 않고 바로 판단할 수 있다. hit 대비 miss 가 많으면
+        # 캐시가 자꾸 비고 있다는 뜻이고, 그만큼 Firestore 를 읽고 있다는 뜻이다.
+        "data_cache": data_service.cache_info(),
         "allowed_origins": settings.ALLOWED_ORIGINS,
     }

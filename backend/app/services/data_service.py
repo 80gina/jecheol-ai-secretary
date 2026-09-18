@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from typing import Any, Optional
@@ -32,7 +33,19 @@ class DataNotFound(Exception):
 # 언제 버리나
 #   ① TTL 이 지나면  ② 쓰기(추가·수정·삭제)가 일어나면 즉시.
 #   ②가 없으면 데이터를 고쳐도 화면이 안 바뀌어서, 캐시가 버그처럼 보인다.
-CACHE_TTL_SEC = 300
+#
+# TTL 을 왜 6시간으로 두나
+#   처음에는 5분이었는데 그것으로는 모자랐다. 원본은 일별 가격이라 하루에 한 번
+#   바뀌는데, 5분마다 다시 읽으면 하루 최대 288회 × 8,760건 = 250만 건이 된다.
+#   게다가 캐시는 프로세스 메모리에 있어서 재배포·절전 복귀 때마다 비므로,
+#   실제로는 그보다 더 자주 읽는다. 실제로 하루 한도 50,000건을 넘겨
+#   Firestore 가 429 를 돌려줬고, 그러면 AI 응답까지 함께 막힌다.
+#
+#   6시간이면 하루 4회 + 재시작 몇 번 = 수만 건이 아니라 수천 건으로 끝난다.
+#   '얼마나 최신이어야 하는가'를 데이터의 갱신 주기에 맞춘 것이지,
+#   숫자를 크게 잡아 문제를 덮은 것이 아니다.
+#   쓰기가 나면 ②로 즉시 버리므로, 값을 고쳤을 때 6시간 기다릴 일은 없다.
+CACHE_TTL_SEC = int(os.getenv("DATA_CACHE_TTL_SEC", "21600"))
 
 _cache: list[dict[str, Any]] | None = None
 _cache_at: float = 0.0
